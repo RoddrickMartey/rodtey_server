@@ -1,0 +1,211 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  BUYER
+  VENDOR
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum VendorStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+}
+
+// ─── Models ─────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  password     String
+  name         String
+  role         Role      @default(BUYER)
+  refreshToken String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  avatar       Image?
+  vendor       Vendor?
+  orders       Order[]
+  reviews      Review[]
+  sentMessages Message[]
+
+  @@map("users")
+}
+
+model Vendor {
+  id              String       @id @default(uuid())
+  userId          String       @unique
+  storeName       String       @unique
+  description     String?
+  status          VendorStatus @default(PENDING)
+  stripeAccountId String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logo     Image?    @relation("VendorLogo")
+  banner   Image?    @relation("VendorBanner")
+  products Product[]
+  payouts  Payout[]
+
+  @@map("vendors")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  image    Image?
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  vendorId    String
+  categoryId  String
+  name        String
+  slug        String   @unique
+  description String
+  price       Decimal  @db.Decimal(10, 2)
+  stock       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vendor     Vendor      @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  category   Category    @relation(fields: [categoryId], references: [id])
+  images     Image[]
+  orderItems OrderItem[]
+  reviews    Review[]
+
+  @@map("products")
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  buyerId         String
+  status          OrderStatus @default(PENDING)
+  total           Decimal     @db.Decimal(10, 2)
+  stripePaymentId String?
+  shippingAddress Json
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  buyer  User        @relation(fields: [buyerId], references: [id])
+  items  OrderItem[]
+  payout Payout?
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2)
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("reviews")
+}
+
+model Payout {
+  id        String   @id @default(uuid())
+  vendorId  String
+  orderId   String   @unique
+  amount    Decimal  @db.Decimal(10, 2)
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+  order  Order  @relation(fields: [orderId], references: [id])
+
+  @@map("payouts")
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  content    String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Image {
+  id        String   @id @default(uuid())
+  url       String
+  publicId  String
+  altText   String?
+  createdAt DateTime @default(now())
+
+  // User avatar
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String? @unique
+
+  // Vendor logo
+  vendorLogo   Vendor? @relation("VendorLogo", fields: [vendorLogoId], references: [id], onDelete: Cascade)
+  vendorLogoId String? @unique
+
+  // Vendor banner
+  vendorBanner   Vendor? @relation("VendorBanner", fields: [vendorBannerId], references: [id], onDelete: Cascade)
+  vendorBannerId String? @unique
+
+  // Category image
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId String?   @unique
+
+  // Product images (many)
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String?
+
+  @@map("images")
+}
