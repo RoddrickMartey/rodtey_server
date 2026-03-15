@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, TokenPayload } from '../utils/token.js';
 import { AppError } from '../utils/AppError.js';
+import { Role } from '../generated/prisma/client.js';
 
 declare global {
   namespace Express {
@@ -18,10 +19,21 @@ export const authenticate = (req: Request, _res: Response, next: NextFunction) =
   next();
 };
 
+const roleHierarchy: Record<Role, number> = {
+  [Role.USER]: 1,
+  [Role.VENDOR]: 2,
+  [Role.ADMIN]: 3,
+};
+
 export const authorize =
-  (...roles: string[]) =>
+  (...roles: Role[]) =>
   (req: Request, _res: Response, next: NextFunction) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    if (!req.user) throw new AppError('Unauthorized', 401, { refresh: true });
+
+    const userLevel = roleHierarchy[req.user.role as Role];
+    const requiredLevel = Math.min(...roles.map((r) => roleHierarchy[r]));
+
+    if (userLevel < requiredLevel) {
       throw new AppError('Forbidden: insufficient permissions', 403);
     }
     next();

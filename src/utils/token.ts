@@ -1,12 +1,13 @@
 import jwt from 'jsonwebtoken';
 import 'dotenv/config';
+import { Role } from '../generated/prisma/client.js';
 
 const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET as string;
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET as string;
 
 export type TokenPayload = {
   userId: string;
-  role: string;
+  role: Role;
 };
 
 export const signAccessToken = (payload: TokenPayload): string =>

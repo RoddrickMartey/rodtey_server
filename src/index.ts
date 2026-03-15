@@ -2,9 +2,12 @@ import 'dotenv/config';
 import http from 'http';
 import app from './app.js';
 import prisma from './config/prisma.js';
+import { initSocket } from './socket/index.js';
 
 const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
+
+initSocket(server);
 
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err.message);

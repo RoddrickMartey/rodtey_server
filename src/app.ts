@@ -6,6 +6,14 @@ import cookieParser from 'cookie-parser';
 import { errorHandler } from './middlewares/errorHandler';
 
 import authRoutes from './modules/auth/auth.routes.js';
+import vendorRoutes from './modules/vendor/vendor.routes.js';
+import categoryRoutes from './modules/category/category.routes.js';
+import productRoutes from './modules/product/product.routes.js';
+import orderRoutes from './modules/order/order.routes.js';
+import reviewRoutes from './modules/review/review.routes.js';
+import uploadRoutes from './modules/upload/upload.routes.js';
+import paymentRoutes from './modules/payment/payment.routes.js';
+import messageRoutes from './modules/message/message.routes.js';
 
 const app = express();
 
@@ -33,6 +41,14 @@ app.get('/health', (_req, res) => {
 
 // ─── Routes ───────────────────────────────────────
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/vendors', vendorRoutes);
+app.use('/api/v1/categories', categoryRoutes);
+app.use('/api/v1/products', productRoutes);
+app.use('/api/v1/orders', orderRoutes);
+app.use('/api/v1/reviews', reviewRoutes);
+app.use('/api/v1/upload', uploadRoutes);
+app.use('/api/v1/payments', paymentRoutes);
+app.use('/api/v1/messages', messageRoutes);
 
 // ─── 404 handler ────────────────────────────────────────
 app.use((_req, res) => {
