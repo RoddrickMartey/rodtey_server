@@ -3,6 +3,7 @@ import prisma from '../../config/prisma.js';
 import { AppError } from '../../utils/AppError.js';
 import { createReviewSchema } from './review.validator.js';
 import { emitToUser } from '../../socket/index.js';
+import { paginate } from '../../utils/paginate.js';
 
 // ─── Create review ───────────────────────────────────────
 export const createReview = async (req: Request, res: Response) => {
@@ -93,7 +94,7 @@ export const getProductReviews = async (req: Request, res: Response) => {
     success: true,
     data: reviews,
     meta: { averageRating: aggregate._avg.rating ?? 0 },
-    pagination: { total, page, limit, pages: Math.ceil(total / limit) },
+    pagination: paginate(total, page, limit),
   });
 };
 
@@ -131,7 +132,7 @@ export const getMyReviews = async (req: Request, res: Response) => {
   res.json({
     success: true,
     data: reviews,
-    pagination: { total, page, limit, pages: Math.ceil(total / limit) },
+    pagination: paginate(total, page, limit),
   });
 };
 

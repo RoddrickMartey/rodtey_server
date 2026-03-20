@@ -90,6 +90,42 @@ export const uploadSingleImage = async (req: Request, res: Response) => {
       return res.status(201).json({ success: true, data: image });
     }
 
+    case 'product': {
+      const product = await prisma.product.findUnique({
+        where: { id: refId },
+        select: { vendorId: true },
+      });
+      if (!product) throw new AppError('Product not found', 404);
+
+      const vendor = await prisma.vendor.findUnique({ where: { userId } });
+      if (!vendor || product.vendorId !== vendor.id) {
+        throw new AppError('Forbidden', 403);
+      }
+
+      // enforce max 5 images
+      const count = await prisma.image.count({
+        where: { productId: refId },
+      });
+
+      if (count >= 5) {
+        throw new AppError('Product already has maximum of 5 images', 400);
+      }
+
+      const { url, publicId } = await uploadImage(base64, `rodtey/products/${refId}`);
+
+      const image = await prisma.image.create({
+        data: {
+          url,
+          publicId,
+          altText,
+          productId: refId,
+        },
+        select: { id: true, url: true, publicId: true },
+      });
+
+      return res.status(201).json({ success: true, data: image });
+    }
+
     default:
       throw new AppError('Invalid upload type for single upload', 400);
   }

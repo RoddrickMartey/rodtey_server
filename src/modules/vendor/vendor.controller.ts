@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../../config/prisma.js';
 import { AppError } from '../../utils/AppError.js';
 import { createVendorSchema, updateVendorSchema } from './vendor.validator.js';
+import { paginate } from '../../utils/paginate.js';
 
 // ─── Create vendor store ─────────────────────────────────
 export const createVendor = async (req: Request, res: Response) => {
@@ -63,6 +64,7 @@ export const getVendorById = async (req: Request, res: Response) => {
     where: { id },
     select: {
       id: true,
+      userId: true,
       storeName: true,
       description: true,
       status: true,
@@ -148,11 +150,6 @@ export const getAllVendors = async (req: Request, res: Response) => {
   res.json({
     success: true,
     data: vendors,
-    pagination: {
-      total,
-      page,
-      limit,
-      pages: Math.ceil(total / limit),
-    },
+    pagination: paginate(total, page, limit),
   });
 };

@@ -3,6 +3,7 @@ import prisma from '../../config/prisma.js';
 import { AppError } from '../../utils/AppError.js';
 import { createOrderSchema, updateOrderStatusSchema } from './order.validator.js';
 import { emitToUser } from '../../socket/index.js';
+import { paginate } from '../../utils/paginate.js';
 
 // ─── Create order ────────────────────────────────────────
 export const createOrder = async (req: Request, res: Response) => {
@@ -28,61 +29,67 @@ export const createOrder = async (req: Request, res: Response) => {
     return sum + Number(product.price) * item.quantity;
   }, 0);
 
-  const order = await prisma.$transaction(async (tx) => {
-    const newOrder = await tx.order.create({
-      data: {
-        buyerId,
-        total,
-        shippingAddress,
-        items: {
-          create: items.map((item) => {
-            const product = products.find((p) => p.id === item.productId)!;
-            return {
-              productId: item.productId,
-              quantity: item.quantity,
-              price: product.price,
-            };
-          }),
+  const order = await prisma.$transaction(
+    async (tx) => {
+      const newOrder = await tx.order.create({
+        data: {
+          buyerId,
+          total,
+          shippingAddress,
+          items: {
+            create: items.map((item) => {
+              const product = products.find((p) => p.id === item.productId)!;
+              return {
+                productId: item.productId,
+                quantity: item.quantity,
+                price: product.price,
+              };
+            }),
+          },
         },
-      },
-      select: {
-        id: true,
-        total: true,
-        status: true,
-        shippingAddress: true,
-        createdAt: true,
-        items: {
-          select: {
-            id: true,
-            quantity: true,
-            price: true,
-            product: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-                images: { take: 1, select: { url: true } },
-                vendor: { select: { userId: true } },
+        select: {
+          id: true,
+          total: true,
+          status: true,
+          shippingAddress: true,
+          createdAt: true,
+          items: {
+            select: {
+              id: true,
+              quantity: true,
+              price: true,
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  images: { take: 1, select: { url: true } },
+                  vendor: { select: { userId: true } },
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
-    await Promise.all(
-      items.map((item) =>
-        tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { decrement: item.quantity } },
-        }),
-      ),
-    );
+      // safe parameterized raw queries — no injection possible
+      await Promise.all(
+        items.map(
+          (item) =>
+            tx.$executeRaw`
+      UPDATE products
+      SET stock = stock - ${item.quantity}
+      WHERE id::text = ${item.productId}
+      AND stock >= ${item.quantity}
+    `,
+        ),
+      );
 
-    return newOrder;
-  });
+      return newOrder;
+    },
+    { timeout: 15000 },
+  );
 
-  // notify each vendor that has a product in this order
   const vendorUserIds = new Set(order.items.map((i) => i.product.vendor.userId));
   vendorUserIds.forEach((vendorUserId) => {
     emitToUser(vendorUserId, 'notification:order', {
@@ -102,7 +109,7 @@ export const getMyOrders = async (req: Request, res: Response) => {
   const limit = Number(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
-  const [orders, total] = await prisma.$transaction([
+  const [orders, total] = await Promise.all([
     prisma.order.findMany({
       where: { buyerId },
       skip,
@@ -135,7 +142,7 @@ export const getMyOrders = async (req: Request, res: Response) => {
   res.json({
     success: true,
     data: orders,
-    pagination: { total, page, limit, pages: Math.ceil(total / limit) },
+    pagination: paginate(total, page, limit),
   });
 };
 
@@ -239,7 +246,7 @@ export const getVendorOrders = async (req: Request, res: Response) => {
   res.json({
     success: true,
     data: orders,
-    pagination: { total, page, limit, pages: Math.ceil(total / limit) },
+    pagination: paginate(total, page, limit),
   });
 };
 

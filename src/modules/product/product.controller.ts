@@ -3,6 +3,8 @@ import prisma from '../../config/prisma.js';
 import { AppError } from '../../utils/AppError.js';
 import { createProductSchema, updateProductSchema } from './product.validator.js';
 import { generateSlug } from '../../utils/slugGenerate.js';
+import { paginate } from '../../utils/paginate.js';
+import { getProductSort } from '../../utils/sort.js';
 
 // ─── Create product ──────────────────────────────────────
 export const createProduct = async (req: Request, res: Response) => {
@@ -42,7 +44,6 @@ export const createProduct = async (req: Request, res: Response) => {
   res.status(201).json({ success: true, data: product });
 };
 
-// ─── Get all products (public) ───────────────────────────
 export const getAllProducts = async (req: Request, res: Response) => {
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 12;
@@ -52,6 +53,7 @@ export const getAllProducts = async (req: Request, res: Response) => {
   const search = req.query.search as string | undefined;
   const minPrice = req.query.minPrice ? Number(req.query.minPrice) : undefined;
   const maxPrice = req.query.maxPrice ? Number(req.query.maxPrice) : undefined;
+  const sort = req.query.sort as string | undefined; // ← add this
 
   const where = {
     isActive: true,
@@ -66,7 +68,7 @@ export const getAllProducts = async (req: Request, res: Response) => {
     }),
   };
 
-  const [products, total] = await prisma.$transaction([
+  const [products, total] = await Promise.all([
     prisma.product.findMany({
       where,
       skip,
@@ -77,12 +79,13 @@ export const getAllProducts = async (req: Request, res: Response) => {
         slug: true,
         price: true,
         stock: true,
+        isActive: true,
         createdAt: true,
-        images: { take: 1, select: { url: true } },
-        category: { select: { name: true, slug: true } },
+        images: { take: 1, select: { url: true, id: true } },
+        category: { select: { name: true, slug: true, id: true } },
         vendor: { select: { id: true, storeName: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: getProductSort(sort),
     }),
     prisma.product.count({ where }),
   ]);
@@ -90,10 +93,9 @@ export const getAllProducts = async (req: Request, res: Response) => {
   res.json({
     success: true,
     data: products,
-    pagination: { total, page, limit, pages: Math.ceil(total / limit) },
+    pagination: paginate(total, page, limit), // ← use paginate util
   });
 };
-
 // ─── Get single product by slug (public) ─────────────────
 export const getProductBySlug = async (req: Request, res: Response) => {
   const { slug } = req.params as { slug: string };
@@ -166,7 +168,7 @@ export const getMyProducts = async (req: Request, res: Response) => {
         stock: true,
         isActive: true,
         createdAt: true,
-        images: { take: 1, select: { url: true } },
+        images: { select: { url: true, id: true } },
         category: { select: { name: true, slug: true } },
         _count: { select: { reviews: true, orderItems: true } },
       },
@@ -178,7 +180,7 @@ export const getMyProducts = async (req: Request, res: Response) => {
   res.json({
     success: true,
     data: products,
-    pagination: { total, page, limit, pages: Math.ceil(total / limit) },
+    pagination: paginate(total, page, limit),
   });
 };
 

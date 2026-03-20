@@ -131,3 +131,9 @@ export const getMe = async (req: Request, res: Response) => {
 
   res.json({ success: true, data: user });
 };
+
+export const getToken = async (req: Request, res: Response) => {
+  const token = req.cookies?.accessToken as string | undefined;
+  if (!token) throw new AppError('Not authenticated', 401);
+  res.json({ success: true, data: { accessToken: token } });
+};

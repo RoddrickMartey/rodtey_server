@@ -33,6 +33,13 @@ enum VendorStatus {
   SUSPENDED
 }
 
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 // ─── Models ─────────────────────────────────────────────
 
 model User {
@@ -49,7 +56,8 @@ model User {
   vendor       Vendor?
   orders       Order[]
   reviews      Review[]
-  sentMessages Message[]
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
 
   @@map("users")
 }
@@ -70,6 +78,7 @@ model Vendor {
   payouts  Payout[]
 
   @@map("vendors")
+  @@index([status, createdAt(sort: Desc)])
 }
 
 model Category {
@@ -105,6 +114,11 @@ model Product {
   reviews    Review[]
 
   @@map("products")
+  @@index([slug])
+  @@index([vendorId, createdAt(sort: Desc)])
+  @@index([categoryId, isActive, createdAt(sort: Desc)])
+  @@index([categoryId])
+  @@index([price])
 }
 
 model Order {
@@ -122,6 +136,8 @@ model Order {
   payout Payout?
 
   @@map("orders")
+  
+  @@index([buyerId, createdAt(sort: Desc)])
 }
 
 model OrderItem {
@@ -135,6 +151,8 @@ model OrderItem {
   product Product @relation(fields: [productId], references: [id])
 
   @@map("order_items")
+  @@index([orderId])
+  @@index([productId])
 }
 
 model Review {
@@ -150,21 +168,24 @@ model Review {
 
   @@unique([userId, productId])
   @@map("reviews")
+  @@index([productId])
+  @@index([productId, createdAt(sort: Desc)])
 }
 
 model Payout {
-  id        String   @id @default(uuid())
+  id        String       @id @default(uuid())
   vendorId  String
-  orderId   String   @unique
-  amount    Decimal  @db.Decimal(10, 2)
-  status    String   @default("PENDING")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  orderId   String       @unique
+  amount    Decimal      @db.Decimal(10, 2)
+  status    PayoutStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
   vendor Vendor @relation(fields: [vendorId], references: [id])
   order  Order  @relation(fields: [orderId], references: [id])
 
   @@map("payouts")
+  @@index([vendorId, createdAt(sort: Desc)])
 }
 
 model Message {
@@ -175,11 +196,12 @@ model Message {
   read       Boolean  @default(false)
   createdAt  DateTime @default(now())
 
-  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  sender   User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
 
   @@map("messages")
+  @@index([receiverId, createdAt(sort: Desc)])
 }
-
 model Image {
   id        String   @id @default(uuid())
   url       String
@@ -208,4 +230,5 @@ model Image {
   productId String?
 
   @@map("images")
+  @@index([productId])
 }

@@ -4,6 +4,8 @@ import prisma from '../../config/prisma.js';
 import { AppError } from '../../utils/AppError.js';
 import { initializePaymentSchema } from './payment.validator.js';
 import { emitToUser } from '../../socket/index.js';
+import { paginate } from '../../utils/paginate.js';
+import { PayoutStatus } from '../../generated/prisma/client.js';
 
 const PLATFORM_FEE = 0.1;
 
@@ -19,41 +21,44 @@ const confirmOrderAndPayout = async (
     }[];
   },
 ) => {
-  await prisma.$transaction(async (tx) => {
-    await tx.order.update({
-      where: { id: orderId },
-      data: { status: 'CONFIRMED' },
-    });
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.order.update({
+        where: { id: orderId, status: 'PENDING' },
+        data: { status: 'CONFIRMED' },
+      });
 
-    const vendorTotals = new Map<string, number>();
-    for (const item of order.items) {
-      const vendorId = item.product.vendorId;
-      const current = vendorTotals.get(vendorId) || 0;
-      vendorTotals.set(vendorId, current + Number(item.price) * item.quantity);
-    }
+      const vendorTotals = new Map<string, number>();
+      for (const item of order.items) {
+        const vendorId = item.product.vendorId;
+        const current = vendorTotals.get(vendorId) || 0;
+        vendorTotals.set(vendorId, current + Number(item.price) * item.quantity);
+      }
 
-    await Promise.all(
-      Array.from(vendorTotals.entries()).map(([vendorId, amount]) =>
-        tx.payout.create({
-          data: {
-            vendorId,
-            orderId,
-            amount: amount * (1 - PLATFORM_FEE),
-            status: 'PENDING',
-          },
-        }),
-      ),
-    );
-  });
+      await Promise.all(
+        Array.from(vendorTotals.entries()).map(([vendorId, amount]) =>
+          tx.payout.upsert({
+            where: { orderId },
+            update: {},
+            create: {
+              vendorId,
+              orderId,
+              amount: amount * (1 - PLATFORM_FEE),
+              status: PayoutStatus.PENDING,
+            },
+          }),
+        ),
+      );
+    },
+    { timeout: 15000 },
+  );
 
-  // notify buyer payment was confirmed
   emitToUser(order.buyerId, 'notification:payment', {
     type: 'PAYMENT_CONFIRMED',
     orderId,
     message: 'Your payment was confirmed and order is being processed',
   });
 
-  // notify each vendor a payout is pending
   const vendorUserIds = new Set(order.items.map((i) => i.product.vendor.userId));
   vendorUserIds.forEach((vendorUserId) => {
     emitToUser(vendorUserId, 'notification:payment', {
@@ -222,6 +227,6 @@ export const getMyPayouts = async (req: Request, res: Response) => {
   res.json({
     success: true,
     data: payouts,
-    pagination: { total, page, limit, pages: Math.ceil(total / limit) },
+    pagination: paginate(total, page, limit),
   });
 };

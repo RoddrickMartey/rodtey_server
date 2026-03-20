@@ -6,7 +6,7 @@ export const getConversation = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { receiverId } = req.params as { receiverId: string };
   const page = Number(req.query.page) || 1;
-  const limit = Number(req.query.limit) || 20;
+  const limit = Number(req.query.limit) || 200;
   const skip = (page - 1) * limit;
 
   const messages = await prisma.message.findMany({
@@ -36,12 +36,12 @@ export const getConversation = async (req: Request, res: Response) => {
 export const getConversations = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
 
-  // get the last message from each unique conversation
   const messages = await prisma.message.findMany({
     where: {
       OR: [{ senderId: userId }, { receiverId: userId }],
     },
     orderBy: { createdAt: 'desc' },
+    take: 200,
     select: {
       id: true,
       content: true,
@@ -49,11 +49,15 @@ export const getConversations = async (req: Request, res: Response) => {
       createdAt: true,
       senderId: true,
       receiverId: true,
-      sender: { select: { id: true, name: true, avatar: { select: { url: true } } } },
+      sender: {
+        select: { id: true, name: true, avatar: { select: { url: true } } },
+      },
+      receiver: {
+        select: { id: true, name: true, avatar: { select: { url: true } } },
+      },
     },
   });
 
-  // group by conversation partner and keep only the latest message
   const conversationMap = new Map<string, (typeof messages)[0]>();
   for (const message of messages) {
     const partnerId = message.senderId === userId ? message.receiverId : message.senderId;

@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { AppError } from '../utils/AppError.js';
 
 export const errorHandler = (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error(err);
   // ─── AppError (already normalized) ────────────────────
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({
@@ -80,7 +81,7 @@ export const errorHandler = (err: unknown, _req: Request, res: Response, _next: 
   }
 
   // ─── Unknown / unhandled errors ────────────────────────
-  console.error('Unhandled error:', err);
+
   return res.status(500).json({
     success: false,
     message: 'Something went wrong on our end',
